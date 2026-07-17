@@ -1,516 +1,375 @@
-package com.example.taller6mm
+package com.example.ahorcado
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
-import androidx.navigation.compose.*
 
-// rutas de navegacion de cada pantalla
-sealed class Screen(val route: String) {
-    object Home     : Screen("home")
-    object Profile  : Screen("profile")
-    object Settings : Screen("settings")
-    // details recibe un parametro con el nombre de la pantalla de origen
-    object Details  : Screen("details/{nombre}") {
-        fun createRoute(nombre: String) = "details/$nombre"
+val ABECEDARIO = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ".toList()
+
+/* DEVUELVE EL ID DE LA IMAGEN SEGÚN LOS ERRORES
+recibe el número de errores y devuelve
+el recurso de imagen correspondiente */
+fun imagenMuneco(errores: Int): Int {
+    return when (errores) {
+        0 -> R.drawable.img_1_1
+        1 -> R.drawable.img_2_1
+        2 -> R.drawable.img_3_1
+        3 -> R.drawable.img_4_1
+        4 -> R.drawable.img_5_1
+        5 -> R.drawable.img_6_1
+        else -> R.drawable.img_7_1
     }
 }
 
-// cada item del menu inferior tiene etiqueta, icono y ruta
-data class BottomNavItem(
-    val label: String,
-    val icon: ImageVector,
-    val route: String
-)
-
-// pantallas que aparecen en la barra inferior
-val bottomNavItems = listOf(
-    BottomNavItem("Inicio",  Icons.Default.Home,     Screen.Home.route),
-    BottomNavItem("Perfil",  Icons.Default.Person,   Screen.Profile.route),
-    BottomNavItem("Ajustes", Icons.Default.Settings, Screen.Settings.route)
-)
-
+//MAIN
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                AppNavigation()
+            MaterialTheme {
+                PantallaAhorcado()
             }
         }
     }
 }
 
-// toda la navegacion de la app
+//PANTALLA PRINCIPAL DEL JUEGO
 @Composable
-fun AppNavigation() {
-    val navController = rememberNavController()
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val rutaActual = navBackStackEntry?.destination?.route
+fun PantallaAhorcado() {
 
-    Scaffold(
-        bottomBar = {
-            // se oculta la barra inferior en la pantalla de detalles
-            if (rutaActual != null && !rutaActual.startsWith("details")) {
-                BarraInferior(navController = navController, rutaActual = rutaActual)
+    /*VARIABLES CON remember
+    remember hace que compose recuerde el valor
+    aunque la pantalla se redibuje
+    mutableStateOf(...) avisa a compose cuando
+    el valor cambia para que actualice la pantalla*/
+
+    //controla si el juego ya inició o aún se está ingresando la palabra
+    var juegoIniciado by remember { mutableStateOf(false) }
+
+    //palabra secreta ingresada por el usuario
+    var palabraActual by remember { mutableStateOf("") }
+
+    //texto que escribe el usuario en el campo de palabra secreta
+    var palabraEscrita by remember { mutableStateOf("") }
+
+    //mensaje de error de validación de la palabra
+    var errorPalabra by remember { mutableStateOf("") }
+
+    //lista de letras ya intentadas
+    var letrasUsadas by remember { mutableStateOf(setOf<Char>()) }
+
+    //contador de errores
+    var errores by remember { mutableStateOf(0) }
+
+    //VARIABLES CALCULADAS sin remember
+    //los huecos: si la letra fue adivinada se muestra, si no "_"
+    val huecos = palabraActual.map { letra ->
+        if (letra in letrasUsadas) letra else '_'
+    }
+
+    //gano o perdio
+    val gano = juegoIniciado && '_' !in huecos
+    val perdio = errores >= 6
+    val juegoTerminado = gano || perdio
+
+    /* VALIDA E INICIA EL JUEGO
+    verifica que la palabra no esté vacía y solo tenga letras */
+    fun iniciarJuego() {
+        when {
+            palabraEscrita.isBlank() -> {
+                errorPalabra = "La palabra no puede estar vacía"
             }
-        }
-    ) { paddingInterno ->
-
-        // contenedor que muestra la pantalla activa
-        NavHost(
-            navController    = navController,
-            startDestination = Screen.Home.route,
-            modifier         = Modifier.padding(paddingInterno)
-        ) {
-            composable(
-                route           = Screen.Home.route,
-                enterTransition = { slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) + fadeIn(tween(300)) },
-                exitTransition  = { slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(300)) + fadeOut(tween(300)) }
-            ) {
-                PantallaHome(navController)
+            !palabraEscrita.all { it.isLetter() } -> {
+                errorPalabra = "Solo se permiten letras"
             }
-
-            composable(
-                route           = Screen.Profile.route,
-                enterTransition = { slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) + fadeIn(tween(300)) },
-                exitTransition  = { slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(300)) + fadeOut(tween(300)) }
-            ) {
-                PantallaPerfil(navController)
-            }
-
-            composable(
-                route           = Screen.Settings.route,
-                enterTransition = { slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) + fadeIn(tween(300)) },
-                exitTransition  = { slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(300)) + fadeOut(tween(300)) }
-            ) {
-                PantallaConfiguracion(navController)
-            }
-
-            // detalles recibe el nombre de la pantalla desde donde se navego
-            composable(
-                route           = Screen.Details.route,
-                enterTransition = { slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(300)) + fadeIn(tween(300)) },
-                exitTransition  = { slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300)) + fadeOut(tween(300)) }
-            ) { backStackEntry ->
-                val nombre = backStackEntry.arguments?.getString("nombre") ?: "Inicio"
-                PantallaDetalles(navController = navController, pantalla = nombre)
+            else -> {
+                palabraActual = palabraEscrita.uppercase()
+                palabraEscrita = ""
+                errorPalabra = ""
+                letrasUsadas = setOf()
+                errores = 0
+                juegoIniciado = true
             }
         }
     }
-}
 
-// barra de navegacion inferior
-@Composable
-fun BarraInferior(navController: NavController, rutaActual: String) {
-    NavigationBar(
-        containerColor = Color(0xFF0D0D0D),
-        contentColor   = Color.White
-    ) {
-        bottomNavItems.forEach { item ->
-            val seleccionado = rutaActual == item.route
-            NavigationBarItem(
-                selected  = seleccionado,
-                onClick   = {
-                    navController.navigate(item.route) {
-                        popUpTo(Screen.Home.route) { inclusive = false }
-                        launchSingleTop = true
-                    }
-                },
-                icon      = { Icon(imageVector = item.icon, contentDescription = item.label) },
-                label     = { Text(item.label) },
-                colors    = NavigationBarItemDefaults.colors(
-                    selectedIconColor   = Color(0xFFE91E8C),
-                    selectedTextColor   = Color(0xFFE91E8C),
-                    unselectedIconColor = Color.Gray,
-                    unselectedTextColor = Color.Gray,
-                    indicatorColor      = Color(0xFF1A1A1A)
-                )
-            )
+    //procesar letra presionada desde los botones
+    fun procesarLetra(letra: Char) {
+        val letraMayus = letra.uppercaseChar()
+        if (letraMayus in letrasUsadas || juegoTerminado) return
+
+        letrasUsadas = letrasUsadas + letraMayus
+
+        if (letraMayus !in palabraActual) {
+            errores += 1 //suma cuando la letra no esta en la palabra
         }
     }
-}
 
-// pantalla de inicio
-@Composable
-fun PantallaHome(navController: NavController) {
+    //reiniciar partida y vuelve a la pantalla de ingreso de palabra
+    fun reiniciar() {
+        juegoIniciado = false
+        palabraActual = ""
+        palabraEscrita = ""
+        errorPalabra = ""
+        letrasUsadas = setOf()
+        errores = 0
+    }
 
-    // estado del TextField con el nombre de la desarrolladora
-    var nombre by remember { mutableStateOf("Maria Madrid") }
-
-    Box(
+    //INTERFAZ
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF1A0030), Color(0xFF0D0D0D))
-                )
-            ),
-        contentAlignment = Alignment.Center
+            .background(Color(0xFFF5F5F5))
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-            modifier            = Modifier.padding(32.dp)
-        ) {
 
-            Text(
-                text  = "Inicio",
-                fontSize = 16.sp,
-                color = Color.White.copy(alpha = 0.6f)
-            )
+        //TITULO
+        Text(
+            text = "AHORCADO",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
 
-            // TextField con el nombre de la desarrolladora
-            OutlinedTextField(
-                value         = nombre,
-                onValueChange = { nombre = it },
-                label         = { Text("Desarrolladora", color = Color.White.copy(alpha = 0.6f)) },
-                textStyle     = androidx.compose.ui.text.TextStyle(
-                    fontSize   = 22.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color      = Color(0xFFE91E8C),
-                    textAlign  = TextAlign.Center
-                ),
-                modifier = Modifier.fillMaxWidth(),
-                colors   = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = Color(0xFFE91E8C),
-                    unfocusedBorderColor = Color(0xFFE91E8C).copy(alpha = 0.5f)
-                ),
-                shape = RoundedCornerShape(14.dp)
-            )
-
-            // icono de esta pantalla
-            Icon(
-                imageVector        = Icons.Default.Home,
-                contentDescription = "icono inicio",
-                modifier           = Modifier.size(130.dp),
-                tint               = Color(0xFFE91E8C)
-            )
-
-            // boton que navega a detalles indicando que viene de Inicio
-            Button(
-                onClick  = { navController.navigate(Screen.Details.createRoute("Inicio")) },
-                colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E8C)),
-                shape    = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp)
-            ) {
-                Text(
-                    text       = "Ver Detalles",
-                    fontSize   = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color      = Color.White
-                )
-            }
-        }
-    }
-}
-
-// pantalla de perfil
-@Composable
-fun PantallaPerfil(navController: NavController) {
-
-    // estado del TextField con el nombre de la desarrolladora
-    var nombre by remember { mutableStateOf("Maria Madrid") }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF001A30), Color(0xFF0D0D0D))
-                )
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-            modifier            = Modifier.padding(32.dp)
-        ) {
-
-            Text(
-                text     = "Perfil",
-                fontSize = 16.sp,
-                color    = Color.White.copy(alpha = 0.6f)
-            )
-
-            // TextField con el nombre de la desarrolladora
-            OutlinedTextField(
-                value         = nombre,
-                onValueChange = { nombre = it },
-                label         = { Text("Desarrolladora", color = Color.White.copy(alpha = 0.6f)) },
-                textStyle     = androidx.compose.ui.text.TextStyle(
-                    fontSize   = 22.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color      = Color(0xFF29B6F6),
-                    textAlign  = TextAlign.Center
-                ),
-                modifier = Modifier.fillMaxWidth(),
-                colors   = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = Color(0xFF29B6F6),
-                    unfocusedBorderColor = Color(0xFF29B6F6).copy(alpha = 0.5f)
-                ),
-                shape = RoundedCornerShape(14.dp)
-            )
-
-            // icono de esta pantalla
-            Icon(
-                imageVector        = Icons.Default.AccountCircle,
-                contentDescription = "icono perfil",
-                modifier           = Modifier.size(130.dp),
-                tint               = Color(0xFF29B6F6)
-            )
-
-            // tarjeta con datos de perfil
+        /* PANTALLA DE INGRESO DE PALABRA SECRETA
+        se muestra antes de iniciar el juego */
+        if (!juegoIniciado) {
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors   = CardDefaults.cardColors(containerColor = Color(0xFF0A1929)),
-                shape    = RoundedCornerShape(16.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
                 Column(
-                    modifier            = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text("Nombre: Maria Madrid", color = Color.White, fontSize = 15.sp)
-                    Text("Carrera: Ingenieria",  color = Color.White, fontSize = 15.sp)
-                    Text("Semestre: 7",          color = Color.White, fontSize = 15.sp)
-                }
-            }
-
-            // boton que navega a detalles indicando que viene de Perfil
-            Button(
-                onClick  = { navController.navigate(Screen.Details.createRoute("Perfil")) },
-                colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFF29B6F6)),
-                shape    = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp)
-            ) {
-                Text(
-                    text       = "Ver Detalles",
-                    fontSize   = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color      = Color(0xFF0D0D0D)
-                )
-            }
-        }
-    }
-}
-
-// pantalla de configuracion
-@Composable
-fun PantallaConfiguracion(navController: NavController) {
-
-    // estado del TextField con el nombre de la desarrolladora
-    var nombre by remember { mutableStateOf("Maria Madrid") }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF0D1F00), Color(0xFF0D0D0D))
-                )
-            )
-    ) {
-        Column(
-            modifier            = Modifier.fillMaxSize().padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-
-            Text(
-                text     = "Configuracion",
-                fontSize = 16.sp,
-                color    = Color.White.copy(alpha = 0.6f)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // TextField con el nombre de la desarrolladora
-            OutlinedTextField(
-                value         = nombre,
-                onValueChange = { nombre = it },
-                label         = { Text("Desarrolladora", color = Color.White.copy(alpha = 0.6f)) },
-                textStyle     = androidx.compose.ui.text.TextStyle(
-                    fontSize   = 22.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color      = Color(0xFF69F0AE),
-                    textAlign  = TextAlign.Center
-                ),
-                modifier = Modifier.fillMaxWidth(),
-                colors   = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = Color(0xFF69F0AE),
-                    unfocusedBorderColor = Color(0xFF69F0AE).copy(alpha = 0.5f)
-                ),
-                shape = RoundedCornerShape(14.dp)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // icono de esta pantalla
-            Icon(
-                imageVector        = Icons.Default.Build,
-                contentDescription = "icono configuracion",
-                modifier           = Modifier.size(110.dp),
-                tint               = Color(0xFF69F0AE)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // tarjeta con informacion de la app
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors   = CardDefaults.cardColors(containerColor = Color(0xFF0A1F00)),
-                shape    = RoundedCornerShape(12.dp)
-            ) {
-                Column(
-                    modifier            = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text("Version: 1.0.0",           color = Color.White, fontSize = 15.sp)
-                    Text("Plataforma: Android",       color = Color.White, fontSize = 15.sp)
-                    Text("Framework: Jetpack Compose", color = Color.White, fontSize = 15.sp)
-                    Text("Taller: 6MM",               color = Color.White, fontSize = 15.sp)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // boton que manda a detalles indicando que viene de Configuracion
-            Button(
-                onClick  = { navController.navigate(Screen.Details.createRoute("Configuracion")) },
-                colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFF69F0AE)),
-                shape    = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp)
-            ) {
-                Text(
-                    text       = "Ver Detalles",
-                    fontSize   = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color      = Color(0xFF0D0D0D)
-                )
-            }
-        }
-    }
-}
-
-// pantalla de detalles. recibe el nombre de la pantalla desde donde se navego
-@Composable
-fun PantallaDetalles(navController: NavController, pantalla: String) {
-
-    // estado del TextField con el nombre de la desarrolladora
-    var nombre by remember { mutableStateOf("Maria Madrid") }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF1F1000), Color(0xFF0D0D0D))
-                )
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-            modifier            = Modifier.padding(32.dp)
-        ) {
-
-            Text(
-                text     = "Detalles",
-                fontSize = 16.sp,
-                color    = Color.White.copy(alpha = 0.6f)
-            )
-
-            // TextField con el nombre de la desarrolladora
-            OutlinedTextField(
-                value         = nombre,
-                onValueChange = { nombre = it },
-                label         = { Text("Desarrolladora", color = Color.White.copy(alpha = 0.6f)) },
-                textStyle     = androidx.compose.ui.text.TextStyle(
-                    fontSize   = 22.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color      = Color(0xFFFFAB40),
-                    textAlign  = TextAlign.Center
-                ),
-                modifier = Modifier.fillMaxWidth(),
-                colors   = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = Color(0xFFFFAB40),
-                    unfocusedBorderColor = Color(0xFFFFAB40).copy(alpha = 0.5f)
-                ),
-                shape = RoundedCornerShape(14.dp)
-            )
-
-            // icono de esta pantalla
-            Icon(
-                imageVector        = Icons.Default.Star,
-                contentDescription = "icono detalles",
-                modifier           = Modifier.size(110.dp),
-                tint               = Color(0xFFFFAB40)
-            )
-
-            // tarjeta que muestra desde que pantalla se navego hasta aqui
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors   = CardDefaults.cardColors(containerColor = Color(0xFF1F1000)),
-                shape    = RoundedCornerShape(16.dp)
-            ) {
-                Column(
-                    modifier            = Modifier.padding(24.dp),
+                    modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text     = "Llegaste desde:",
-                        color    = Color.White.copy(alpha = 0.6f),
-                        fontSize = 13.sp
+                        text = "Ingresa la palabra secreta",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 12.dp)
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    // muestra el nombre de la pantalla de origen
-                    Text(
-                        text       = pantalla,
-                        color      = Color(0xFFFFAB40),
-                        fontSize   = 22.sp,
-                        fontWeight = FontWeight.Bold
+
+                    //CAMPO TIPO CONTRASEÑA para ocultar la palabra
+                    OutlinedTextField(
+                        value = palabraEscrita,
+                        onValueChange = { nueva ->
+                            //solo letras, sin límite de longitud
+                            if (nueva.all { it.isLetter() || it == ' ' }) {
+                                palabraEscrita = nueva
+                                errorPalabra = ""
+                            }
+                        },
+                        label = { Text("Palabra secreta") },
+                        //visualTransformation oculta el texto como contraseña
+                        visualTransformation = PasswordVisualTransformation(),
+                        isError = errorPalabra.isNotEmpty(),
+                        supportingText = {
+                            if (errorPalabra.isNotEmpty()) {
+                                Text(text = errorPalabra, color = Color(0xFFB71C1C))
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
                     )
+
+                    Button(
+                        onClick = { iniciarJuego() },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Iniciar juego")
+                    }
                 }
             }
 
-            // boton para regresar a la pantalla anterior
-            Button(
-                onClick  = { navController.popBackStack() },
-                colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFAB40)),
-                shape    = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp)
+        } else {
+
+            //IMAGEN DEL MUÑECO
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
-                Text(
-                    text       = "Volver",
-                    fontSize   = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color      = Color(0xFF0D0D0D)
+                Image(
+                    painter = painterResource(id = imagenMuneco(errores)),
+                    contentDescription = "Ahorcado con $errores errores",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .padding(16.dp)
                 )
             }
+
+            //ERRORES
+            Text(
+                text = "Errores: $errores / 6",
+                fontSize = 16.sp,
+                color = if (errores >= 4) Color.Red else Color.DarkGray,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            //PALABRA CON HUECOS
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
+                //lazyrow muestra cada letra/hueco como un item
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    items(huecos) { caracter ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(horizontal = 5.dp)
+                        ) {
+                            Text(
+                                text = caracter.toString(),
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                                color = if (caracter == '_') Color.Gray else Color(0xFF1565C0)
+                            )
+                            //linea debajo de cada letra
+                            Spacer(modifier = Modifier
+                                .width(22.dp)
+                                .height(2.dp)
+                                .background(Color.DarkGray))
+                        }
+                    }
+                }
+            }
+
+            /*BOTONES DEL ABECEDARIO
+            reemplaza el campo de texto, cada letra es un botón
+            +si está en letrasUsadas Y en la palabra, verde
+            +si está en letrasUsadas Y no está, rojo
+            +si no fue usada, azul normal */
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    //dividimos el abecedario en filas de 7 letras
+                    ABECEDARIO.chunked(7).forEach { fila ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            fila.forEach { letra ->
+                                val usada = letra in letrasUsadas
+                                val acierto = usada && letra in palabraActual
+
+                                //when decide el color del botón segun su estado
+                                val colorBoton = when {
+                                    acierto -> Color(0xFF2E7D32)   // verde si acerto
+                                    usada   -> Color(0xFFB71C1C)   // rojo si fallo
+                                    else    -> Color(0xFF1565C0)   // azul si no usada
+                                }
+
+                                Button(
+                                    onClick = { procesarLetra(letra) },
+                                    enabled = !usada && !juegoTerminado,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = colorBoton,
+                                        disabledContainerColor = colorBoton.copy(alpha = 0.6f)
+                                    ),
+                                    contentPadding = PaddingValues(0.dp),
+                                    modifier = Modifier
+                                        .padding(2.dp)
+                                        .size(38.dp)
+                                ) {
+                                    Text(
+                                        text = letra.toString(),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        textDecoration = if (usada) TextDecoration.LineThrough else TextDecoration.None
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            //MENSAJE DE FIN DE JUEGO
+            if (juegoTerminado) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (gano) Color(0xFFE8F5E9) else Color(0xFFFFEBEE)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = if (gano) "¡Ganaste!" else "Perdiste",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (gano) Color(0xFF2E7D32) else Color(0xFFB71C1C)
+                        )
+                        if (perdio) {
+                            Text(
+                                text = "La palabra era: $palabraActual",
+                                fontSize = 14.sp,
+                                color = Color.Gray,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        Button(
+                            onClick = { reiniciar() },
+                            modifier = Modifier.padding(top = 12.dp)
+                        ) {
+                            Text("Jugar de nuevo")
+                        }
+                    }
+                }
+            }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
